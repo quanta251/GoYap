@@ -1,72 +1,92 @@
 package main
 
 import (
-    "fmt"
-    "bufio"
-    "encoding/binary"
-    "net"
-    "os"
-    "strings"
+	"bufio"
+	"encoding/binary"
+	"fmt"
+	"net"
+	"os"
+	"strings"
 )
 
+// Define the prefix length
 const prefixLength = 4
 
+func checkInput(input string) bool {
+	if input == "exit" || input == "quit" {
+		return true
+	}
+
+	return false
+}
+
+// Take the message and send it over the connection
+func sendMessage(conn net.Conn, message string) error {
+	// Cast the message as a byte slice
+	payload := []byte(message)
+
+	// Prepare the prefix
+	payloadLength := uint32(len(payload))
+	prefix := make([]byte, prefixLength)
+	binary.BigEndian.PutUint32(prefix, payloadLength)
+
+	// Send the prefix
+	_, err := conn.Write(prefix)
+	if err != nil {
+		fmt.Println("Could not send prefix...")
+		return err
+	}
+
+	// Send the message
+	_, err = conn.Write(payload)
+	if err != nil {
+		fmt.Println("Could not send message...")
+		return err
+	}
+
+	return nil
+}
+
 func main() {
-
-    conn, err := net.Dial("tcp", "sabretooth:3000")
-    if err != nil {
-        panic(err)
-    }
-
-    defer conn.Close()
-
-
-    reader := bufio.NewReader(os.Stdin)
-
-    for {
-        fmt.Println("Client -- Enter Message to Server: ")
-        input, err := reader.ReadString('\n')
-        if err != nil {
-            fmt.Println("Input error:", err)
-            return
-        }
-
-        input = strings.TrimSpace(input)
-
-        if input == "" {
-            continue
-        }
-
-        payload := []byte(input)
-        length := uint32(len(payload))
-
-        prefix := make([]byte, prefixLength)
-        binary.BigEndian.PutUint32(prefix, length)
-
-        _, err = conn.Write(prefix)
-        if err != nil {
-            fmt.Println("Error sending prefix:", err)
-            return
-        }
-        
-        _, err = conn.Write(payload)
-        if err != nil {
-            fmt.Println("Error sending payload", err)
-            return
-        }
+	serverAddress := "localhost:3000"
+	conn, err := net.Dial("tcp", serverAddress)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()	
 
 
-        response := make([]byte, 1024)
-        n, err := conn.Read(response)
-        if err != nil {
-            fmt.Println("Server Closed Connection.")
-            return
-        }
+	fmt.Printf("Succesfully connected to server '%s'\n\n", serverAddress)
+	fmt.Println("Please input your messages below")
 
-        fmt.Printf("Server -- %s\n", response[:n])
-        if input == "QUIT" {
-            fmt.Println("Exiting Client.")
-            return
-        }
-    }
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Print("> ")
+
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Could not read your message...")
+			continue
+		}
+
+		// Trim off the white space
+		input = strings.TrimSuffix(input, "\n")
+
+		fmt.Printf("The users input is: %b\n", []byte(input))
+		fmt.Printf("The byte version of 'quit' is: %b\n", []byte("quit"))
+		fmt.Printf("The byte version of 'exit' is: %b\n", []byte("exit"))
+
+		// Check input for quit commands...
+		if checkInput(input) {
+			fmt.Println("Quitting the client now...")
+			return
+		}
+
+		err = sendMessage(conn, input)
+		if err != nil {
+			continue
+		}
+		fmt.Printf("Message sent...\n\n")
+	}
 }
