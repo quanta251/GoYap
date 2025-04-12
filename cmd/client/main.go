@@ -73,13 +73,10 @@ func main() {
 		// Trim off the white space
 		input = strings.TrimSuffix(input, "\n")
 
-		fmt.Printf("The users input is: %b\n", []byte(input))
-		fmt.Printf("The byte version of 'quit' is: %b\n", []byte("quit"))
-		fmt.Printf("The byte version of 'exit' is: %b\n", []byte("exit"))
-
 		// Check input for quit commands...
 		if checkInput(input) {
 			fmt.Println("Quitting the client now...")
+			sendMessage(conn, input)
 			return
 		}
 

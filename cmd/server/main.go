@@ -85,6 +85,7 @@ func (s *Server) Start() error {
 
 func (s *Server) acceptLoop() {
     for {
+		fmt.Println("Waiting for a new connection...")
         conn, err := s.ln.Accept()
         if err != nil {
             fmt.Println("accept error:", err)
@@ -95,12 +96,13 @@ func (s *Server) acceptLoop() {
         s.activeConns++
 
         go s.readLoop(conn)
+		fmt.Println("Started a new read loop")
     }
 }
 
 func (s *Server) readLoop(conn net.Conn) {
-    defer conn.Close()
     defer func() {
+		conn.Close()
         s.activeConns-- // Decrement the number of activate connections
     }()
 
@@ -111,7 +113,7 @@ func (s *Server) readLoop(conn net.Conn) {
         err := readN(conn, prefix)
         if err != nil {
             fmt.Println("Read error (prefix):", err)
-            return // Breaking the loop here. 
+			continue // Continue to the next message without exiting the server
         }
 
         // Convert the prefix to a length
@@ -122,15 +124,15 @@ func (s *Server) readLoop(conn net.Conn) {
         err = readN(conn, messageBuf)
         if err != nil {
             fmt.Println("Read error (body):", err)
-            return
+			continue
         }
-
 
         message := string(messageBuf)
 
-        if message == "QUIT" || message == "EXIT" {
+        if message == "quit" || message == "exit" {
             fmt.Printf("Client %s requested to close the connection...\n", conn.RemoteAddr())
             conn.Write([]byte("Goodbye.\n"))
+			return
         }
 
         
