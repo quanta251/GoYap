@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -11,6 +12,23 @@ import (
 
 // Define the prefix length
 const prefixLength = 4
+
+func getUsername() (string, error) {
+	fmt.Println("-------------- Please Input Your Name Below --------------")
+	reader := bufio.NewReader(os.Stdin)
+		
+	username, err := reader.ReadString('\n')
+	if err != nil {
+		log.Println("Could not get username from the user...", err)
+		return username, err // Does not matter if we send junk as the username. The error will be caught and handled.
+	}
+
+	username = strings.TrimSpace(username)
+
+	fmt.Printf("Welcome, %s. You will be connected shortly...\n", username)
+
+	return username, nil
+}
 
 func checkInput(input string) bool {
 	if input == "exit" || input == "quit" {
@@ -33,14 +51,14 @@ func sendMessage(conn net.Conn, message string) error {
 	// Send the prefix
 	_, err := conn.Write(prefix)
 	if err != nil {
-		fmt.Println("Could not send prefix...")
+		fmt.Println("Could not send message (prefix)...")
 		return err
 	}
 
 	// Send the message
 	_, err = conn.Write(payload)
 	if err != nil {
-		fmt.Println("Could not send message...")
+		fmt.Println("Could not send message (body)...")
 		return err
 	}
 
@@ -48,12 +66,18 @@ func sendMessage(conn net.Conn, message string) error {
 }
 
 func main() {
+	clientName, err := getUsername()
+	if err != nil {
+		log.Fatalln("Could not get username from client...", err)
+	}
+
 	serverAddress := "localhost:3000"
 	conn, err := net.Dial("tcp", serverAddress)
 	if err != nil {
 		panic(err)
 	}
 	defer conn.Close()	
+	err = sendMessage(conn, clientName) // The first message will be interpreted as defining who we are...
 
 
 	fmt.Printf("Succesfully connected to server '%s'\n\n", serverAddress)

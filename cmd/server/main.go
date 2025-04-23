@@ -9,6 +9,7 @@ import (
     "os/signal"
     "syscall"
     "os"
+	"github.com/quanta251/GoYap/internal"
 )
 
 const bufferSize = 2048
@@ -19,6 +20,8 @@ type Message struct {
     payload         []byte
 }
 
+var clients = make(map[string]net.Conn) // This is the variable that will store username -> ip address info
+
 type Server struct {
     listenAddr      string
     ln              net.Listener
@@ -26,6 +29,40 @@ type Server struct {
     msgch           chan Message
     activeConns     int // Track the number of connections here
     shutdownTimeout time.Duration
+}
+
+func receiveMessage(conn net.Conn) ([]byte, error) {
+	prefix := make([]byte, prefixlength)
+	err := helpers.ReadN(conn, prefix)
+	if err != nil {
+		log.Println("Could not receive prefix from client:", err)
+		return nil, err
+	}
+
+	var messageLength uint32 = binary.BigEndian.Uint32(prefix)
+
+	payload := make([]byte, messageLength)
+
+	err = helpers.ReadN(conn, payload)
+	if err != nil {
+		log.Println("Could not receive payload from client:", err)
+		return nil, err
+	}
+
+	return payload, nil
+}
+
+func receiveUsername(addressBook map[string]net.Conn, conn net.Conn) error {
+	usernameBytes, err := receiveMessage(conn)
+	if err != nil {
+		log.Printf("Could not get the username from client '%s': %v\n", conn.RemoteAddr(), err)
+		return err
+	}
+
+	usernameString := string(usernameBytes)
+	addressBook[usernameString] = conn
+
+	return nil
 }
 
 func NewServer(listenAddr string) *Server {
@@ -95,6 +132,16 @@ func (s *Server) acceptLoop() {
         fmt.Println("New connection from:", conn.RemoteAddr())
         s.activeConns++
 
+		// Receive the username here and add it to the map containing other
+		// users
+		err = receiveUsername(clients, conn)
+		if err != nil {
+			log.Printf("Could not get the username from client '%s'\n", conn.RemoteAddr())
+			conn.Close()			// Close the current connection as it will not be used
+			s.activeConns-- 		// Decrement the number of connections
+			continue				// Continue to the next connection acceptance
+		}
+
         go s.readLoop(conn)
 		fmt.Println("Started a new read loop")
     }
@@ -110,7 +157,7 @@ func (s *Server) readLoop(conn net.Conn) {
 
     for {
         // Try to get the prefix length
-        err := readN(conn, prefix)
+        err := helpers.ReadN(conn, prefix)
         if err != nil {
             fmt.Println("Read error (prefix):", err)
 			continue // Continue to the next message without exiting the server
@@ -121,7 +168,7 @@ func (s *Server) readLoop(conn net.Conn) {
 
         // Establish the message buffer which will hold the payload
         messageBuf := make([]byte, messageLength)
-        err = readN(conn, messageBuf)
+        err = helpers.ReadN(conn, messageBuf)
         if err != nil {
             fmt.Println("Read error (body):", err)
 			continue
@@ -147,17 +194,6 @@ func (s *Server) readLoop(conn net.Conn) {
     }
 }
 
-func readN(conn net.Conn, buf []byte) error {
-    total := 0
-    for total < len(buf) {
-        n, err := conn.Read(buf[total:])
-        if err != nil {
-            return err
-        }
-        total += n
-    }
-    return nil
-}
 
 func main() {
     server := NewServer(":3000")
@@ -168,5 +204,6 @@ func main() {
         }
     }()
 
-    log.Fatal(server.Start())
+    log.Println(server.Start())
+	fmt.Println("The active connections we have are:", clients)
 }

@@ -1,3 +1,3 @@
-module github.com/quanta251/simple_tcp_server
+module github.com/quanta251/GoYap
 
-go 1.23.4
+go 1.24.2
