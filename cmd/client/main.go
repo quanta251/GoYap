@@ -2,16 +2,13 @@ package main
 
 import (
 	"bufio"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"strings"
+	"github.com/quanta251/GoYap/internal"
 )
-
-// Define the prefix length
-const prefixLength = 4
 
 func getUsername() (string, error) {
 	fmt.Println("-------------- Please Input Your Name Below --------------")
@@ -25,7 +22,7 @@ func getUsername() (string, error) {
 
 	username = strings.TrimSpace(username)
 
-	fmt.Printf("Welcome, %s. You will be connected shortly...\n", username)
+	fmt.Println("You will be connected shortly.")
 
 	return username, nil
 }
@@ -38,32 +35,6 @@ func checkInput(input string) bool {
 	return false
 }
 
-// Take the message and send it over the connection
-func sendMessage(conn net.Conn, message string) error {
-	// Cast the message as a byte slice
-	payload := []byte(message)
-
-	// Prepare the prefix
-	payloadLength := uint32(len(payload))
-	prefix := make([]byte, prefixLength)
-	binary.BigEndian.PutUint32(prefix, payloadLength)
-
-	// Send the prefix
-	_, err := conn.Write(prefix)
-	if err != nil {
-		fmt.Println("Could not send message (prefix)...")
-		return err
-	}
-
-	// Send the message
-	_, err = conn.Write(payload)
-	if err != nil {
-		fmt.Println("Could not send message (body)...")
-		return err
-	}
-
-	return nil
-}
 
 func main() {
 	clientName, err := getUsername()
@@ -77,10 +48,14 @@ func main() {
 		panic(err)
 	}
 	defer conn.Close()	
-	err = sendMessage(conn, clientName) // The first message will be interpreted as defining who we are...
 
+	err = helpers.SendMessage(conn, clientName) 	// The first message will be interpreted as defining who we are...
+	response, err := helpers.ReceiveMessage(conn)	// Get the server's response to the username submission
 
 	fmt.Printf("Succesfully connected to server '%s'\n\n", serverAddress)
+	fmt.Println(string(response))
+	fmt.Println("------------------------------------------------------------")
+
 	fmt.Println("Please input your messages below")
 
 	reader := bufio.NewReader(os.Stdin)
@@ -100,11 +75,11 @@ func main() {
 		// Check input for quit commands...
 		if checkInput(input) {
 			fmt.Println("Quitting the client now...")
-			sendMessage(conn, input)
+			helpers.SendMessage(conn, input)
 			return
 		}
 
-		err = sendMessage(conn, input)
+		err = helpers.SendMessage(conn, input)
 		if err != nil {
 			continue
 		}

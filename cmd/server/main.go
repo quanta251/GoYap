@@ -12,15 +12,15 @@ import (
 	"github.com/quanta251/GoYap/internal"
 )
 
-const bufferSize = 2048
-const prefixlength = 4
+const prefixLength = 4
 
 type Message struct {
-    from            string
+    from            net.Conn
     payload         []byte
 }
 
-var clients = make(map[string]net.Conn) // This is the variable that will store username -> ip address info
+var usernameToConn = make(map[string]net.Conn) 	// This is the variable that will store username -> connection info
+var connToUsername = make(map[net.Conn]string)	// This is the variable that will store connection -> usernmae info
 
 type Server struct {
     listenAddr      string
@@ -31,36 +31,28 @@ type Server struct {
     shutdownTimeout time.Duration
 }
 
-func receiveMessage(conn net.Conn) ([]byte, error) {
-	prefix := make([]byte, prefixlength)
-	err := helpers.ReadN(conn, prefix)
-	if err != nil {
-		log.Println("Could not receive prefix from client:", err)
-		return nil, err
-	}
-
-	var messageLength uint32 = binary.BigEndian.Uint32(prefix)
-
-	payload := make([]byte, messageLength)
-
-	err = helpers.ReadN(conn, payload)
-	if err != nil {
-		log.Println("Could not receive payload from client:", err)
-		return nil, err
-	}
-
-	return payload, nil
-}
-
-func receiveUsername(addressBook map[string]net.Conn, conn net.Conn) error {
-	usernameBytes, err := receiveMessage(conn)
+func receiveUsername(usernameToConn map[string]net.Conn, connToUsername map[net.Conn]string, conn net.Conn) error {
+	usernameBytes, err := helpers.ReceiveMessage(conn)
 	if err != nil {
 		log.Printf("Could not get the username from client '%s': %v\n", conn.RemoteAddr(), err)
 		return err
 	}
 
 	usernameString := string(usernameBytes)
-	addressBook[usernameString] = conn
+
+	// Update the "address book" maps
+	usernameToConn[usernameString] = conn
+	connToUsername[conn] = usernameString
+
+	fmt.Printf("New user '%s' connected from '%s'\n", usernameString, conn.RemoteAddr())
+
+	welcomeMessage := fmt.Sprintf("Welcome, %s. You are now connected to the server.\n", usernameString)
+
+	err = helpers.SendMessage(conn, welcomeMessage)
+	if err != nil {
+		log.Printf("Could not send the welcome message to the new user, '%s': %v", usernameString, err)
+		return err
+	}
 
 	return nil
 }
@@ -134,7 +126,7 @@ func (s *Server) acceptLoop() {
 
 		// Receive the username here and add it to the map containing other
 		// users
-		err = receiveUsername(clients, conn)
+		err = receiveUsername(usernameToConn, connToUsername, conn)
 		if err != nil {
 			log.Printf("Could not get the username from client '%s'\n", conn.RemoteAddr())
 			conn.Close()			// Close the current connection as it will not be used
@@ -153,7 +145,7 @@ func (s *Server) readLoop(conn net.Conn) {
         s.activeConns-- // Decrement the number of activate connections
     }()
 
-    prefix := make([]byte, prefixlength)
+    prefix := make([]byte, prefixLength)
 
     for {
         // Try to get the prefix length
@@ -177,7 +169,7 @@ func (s *Server) readLoop(conn net.Conn) {
         message := string(messageBuf)
 
         if message == "quit" || message == "exit" {
-            fmt.Printf("Client %s requested to close the connection...\n", conn.RemoteAddr())
+            fmt.Printf("%s (%s) requested to close the connection...\n", connToUsername[conn], conn.RemoteAddr())
             conn.Write([]byte("Goodbye.\n"))
 			return
         }
@@ -185,7 +177,7 @@ func (s *Server) readLoop(conn net.Conn) {
         
         // Otherwise, handle the message normally
         s.msgch <- Message{
-            from:       conn.RemoteAddr().String(),
+            from:       conn,
             payload:    messageBuf,
         }
 
@@ -200,10 +192,10 @@ func main() {
     
     go func(){
         for msg := range server.msgch {
-            fmt.Printf("Received message from connection(%s):%s\n", msg.from, msg.payload)
+            fmt.Printf("Received message from '%s'(%s):%s\n", connToUsername[msg.from], msg.from.RemoteAddr(), msg.payload)
         }
     }()
 
     log.Println(server.Start())
-	fmt.Println("The active connections we have are:", clients)
+	fmt.Println("The active connections we have are:", usernameToConn)
 }
