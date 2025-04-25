@@ -1,22 +1,24 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
-    "os/signal"
-    "syscall"
-    "os"
-	"github.com/quanta251/GoYap/internal"
+
+	"github.com/quanta251/GoYap/helpers"
+	"github.com/quanta251/GoYap/helpers/server"
 )
 
 const prefixLength = 4
 
 type Message struct {
     from            net.Conn
-    payload         []byte
+    payload         string
 }
 
 var usernameToConn = make(map[string]net.Conn) 	// This is the variable that will store username -> connection info
@@ -32,17 +34,18 @@ type Server struct {
 }
 
 func receiveUsername(usernameToConn map[string]net.Conn, connToUsername map[net.Conn]string, conn net.Conn) error {
-	usernameBytes, err := helpers.ReceiveMessage(conn)
+	var mu sync.Mutex
+	usernameString, err := helpers.ReceiveMessage(conn)
 	if err != nil {
 		log.Printf("Could not get the username from client '%s': %v\n", conn.RemoteAddr(), err)
 		return err
 	}
 
-	usernameString := string(usernameBytes)
-
 	// Update the "address book" maps
+	mu.Lock()
 	usernameToConn[usernameString] = conn
 	connToUsername[conn] = usernameString
+	mu.Unlock()
 
 	fmt.Printf("New user '%s' connected from '%s'\n", usernameString, conn.RemoteAddr())
 
@@ -145,40 +148,35 @@ func (s *Server) readLoop(conn net.Conn) {
         s.activeConns-- // Decrement the number of activate connections
     }()
 
-    prefix := make([]byte, prefixLength)
-
     for {
-        // Try to get the prefix length
-        err := helpers.ReadN(conn, prefix)
-        if err != nil {
-            fmt.Println("Read error (prefix):", err)
-			continue // Continue to the next message without exiting the server
-        }
-
-        // Convert the prefix to a length
-        var messageLength uint32 = binary.BigEndian.Uint32(prefix)
-
-        // Establish the message buffer which will hold the payload
-        messageBuf := make([]byte, messageLength)
-        err = helpers.ReadN(conn, messageBuf)
-        if err != nil {
-            fmt.Println("Read error (body):", err)
+		message, err := helpers.ReceiveMessage(conn)
+		if err != nil {
+			log.Printf("")
 			continue
-        }
+		}
 
-        message := string(messageBuf)
-
-        if message == "quit" || message == "exit" {
+		switch message {
+		case "quit", "exit":
             fmt.Printf("%s (%s) requested to close the connection...\n", connToUsername[conn], conn.RemoteAddr())
-            conn.Write([]byte("Goodbye.\n"))
+            // conn.Write([]byte("Goodbye.\n"))
+			helpers.SendMessage(conn, "Goodbye.")
 			return
-        }
+		case "listusers":
+			// Send the list of connected users
+			fmt.Printf("User %s is requesting the list of users. Sending it now...", connToUsername[conn])
+			err := server.SendUsernameList(conn, usernameToConn)
+			if err != nil {
+				log.Println("Could not send the username list")
+				helpers.SendMessage(conn, "Could not send the list of connected users")
+			}
+			continue
+		}
 
         
         // Otherwise, handle the message normally
         s.msgch <- Message{
             from:       conn,
-            payload:    messageBuf,
+            payload:    message,
         }
 
         conn.Write([]byte("Thank you for your message.\n"))

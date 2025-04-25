@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"strings"
-	"github.com/quanta251/GoYap/internal"
+
+	"github.com/quanta251/GoYap/helpers"
 )
 
 func getUsername() (string, error) {
@@ -53,7 +55,7 @@ func main() {
 	response, err := helpers.ReceiveMessage(conn)	// Get the server's response to the username submission
 
 	fmt.Printf("Succesfully connected to server '%s'\n\n", serverAddress)
-	fmt.Println(string(response))
+	fmt.Println(response)
 	fmt.Println("------------------------------------------------------------")
 
 	fmt.Println("Please input your messages below")
@@ -77,6 +79,34 @@ func main() {
 			fmt.Println("Quitting the client now...")
 			helpers.SendMessage(conn, input)
 			return
+		}
+
+		switch input {
+		case "quit", "exit":
+			// fmt.Println("Quitting the client now...")
+			helpers.SendMessage(conn, input)
+			return
+		case "listusers":
+			helpers.SendMessage(conn, input)
+			fmt.Println("Requesting a list of connected users...")
+			response, err := helpers.ReceiveMessage(conn)
+			if err != nil {
+				log.Println("Could not receive the list of users:", err)
+				continue
+			}
+
+			// Parse the JSON response
+			var users []string
+			err = json.Unmarshal([]byte(response), &users)
+			if err != nil {
+				log.Println("Error parsing the JSON user list.", err)
+				continue
+			}
+
+			fmt.Println("Currently Connected Users:")
+			for _, user := range users {
+				fmt.Println("- " + user)
+			}
 		}
 
 		err = helpers.SendMessage(conn, input)
