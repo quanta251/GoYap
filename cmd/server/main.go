@@ -163,12 +163,13 @@ func (s *Server) readLoop(conn net.Conn) {
 			return
 		case "listusers":
 			// Send the list of connected users
-			fmt.Printf("User %s is requesting the list of users. Sending it now...", connToUsername[conn])
+			fmt.Printf("User %s is requesting the list of users. Sending it now...\n", connToUsername[conn])
 			err := server.SendUsernameList(conn, usernameToConn)
 			if err != nil {
 				log.Println("Could not send the username list")
 				helpers.SendMessage(conn, "Could not send the list of connected users")
 			}
+			fmt.Println("Done with listusers command")
 			continue
 		}
 

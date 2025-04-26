@@ -8,8 +8,7 @@ import (
 	"github.com/quanta251/GoYap/helpers"
 )
 
-func CheckMessage(message string) {
-	// Logic for checking message for specific keywords.
+func ParseMessage(message string) {
 
 }
 
@@ -31,6 +30,6 @@ func SendUsernameList(conn net.Conn, usernameMap map[string]net.Conn) error {
 		log.Println("Could not send the stringified JSON usernames list.")
 		return err
 	}
-	fmt.Println("Successfully send the list of usernames to a user.")
+	fmt.Println("Successfully sent the list of usernames to a user.")
 	return nil
 }
