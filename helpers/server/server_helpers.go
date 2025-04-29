@@ -25,6 +25,7 @@ func SendUsernameList(conn net.Conn, usernameMap map[string]net.Conn) error {
 		return err
 	}
 
+	fmt.Println("the length of the json message is", len(response))
 	err = helpers.SendMessage(conn, string(response))
 	if err != nil {
 		log.Println("Could not send the stringified JSON usernames list.")

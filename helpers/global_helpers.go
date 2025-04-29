@@ -1,9 +1,10 @@
 package helpers
 
 import (
-	"net"
 	"encoding/binary"
+	"fmt"
 	"log"
+	"net"
 )
 
 const prefixLength = 4
@@ -32,17 +33,25 @@ func SendMessage(conn net.Conn, message string) error {
 	prefix := make([]byte, prefixLength)
 	binary.BigEndian.PutUint32(prefix, payloadLength)
 
-	// Send the prefix
-	_, err := conn.Write(prefix)
-	if err != nil {
-		log.Println("Could not send message (prefix)...")
-		return err
-	}
+	// // Send the prefix
+	// _, err := conn.Write(prefix)
+	// if err != nil {
+	// 	log.Println("Could not send message (prefix)...")
+	// 	return err
+	// }
+	//
+	// // Send the message
+	// _, err = conn.Write(payload)
+	// if err != nil {
+	// 	log.Println("Could not send message (body)...")
+	// 	return err
+	// }
 
-	// Send the message
-	_, err = conn.Write(payload)
+	// Join the prefix and the payload together
+	entireMessage := append(prefix, payload...)
+	_, err := conn.Write(entireMessage)
 	if err != nil {
-		log.Println("Could not send message (body)...")
+		log.Println("Could not send the message...")
 		return err
 	}
 
@@ -59,6 +68,7 @@ func ReceiveMessage(conn net.Conn) (string, error) {
 	}
 
 	var messageLength uint32 = binary.BigEndian.Uint32(prefix)
+	fmt.Println("Just got the prefix:", messageLength)
 
 	payload := make([]byte, messageLength)
 

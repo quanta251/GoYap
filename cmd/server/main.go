@@ -22,7 +22,7 @@ type Message struct {
 }
 
 var usernameToConn = make(map[string]net.Conn) 	// This is the variable that will store username -> connection info
-var connToUsername = make(map[net.Conn]string)	// This is the variable that will store connection -> usernmae info
+var connToUsername = make(map[net.Conn]string)	// This is the variable that will store connection -> username info
 
 type Server struct {
     listenAddr      string
@@ -155,6 +155,7 @@ func (s *Server) readLoop(conn net.Conn) {
 			continue
 		}
 
+		// Handle special cases such as commands and disconnect requests
 		switch message {
 		case "quit", "exit":
             fmt.Printf("%s (%s) requested to close the connection...\n", connToUsername[conn], conn.RemoteAddr())
